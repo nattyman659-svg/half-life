@@ -194,7 +194,7 @@ const About = () => (<div className="max-w-2xl space-y-5"><h2 className="font-di
 
 const Contact = () => (<div className="max-w-xl space-y-3"><h2 className="font-display text-4xl">Contact the developer</h2>
   {[['Telegram', '@Alexander_345', 'https://t.me/Alexander_345'], ['Instagram', 'natnael__abera', 'https://www.instagram.com/natnael__abera/'],
-    ['LinkedIn', 'nattyman3450@gmail.com', 'mailto:nattyman3450@gmail.com'], ['GitHub', 'nattyman659@gmail.com', 'mailto:nattyman659@gmail.com'],
+    ['LinkedIn', 'natty-undefined', 'https://www.linkedin.com/in/natty-undefined-540294450'], ['GitHub', 'nattyman659-svg', 'https://github.com/nattyman659-svg'],
     ['Gmail', 'nattyman659@gmail.com', 'mailto:nattyman659@gmail.com']].map(([n, v, h]) =>
     <a key={n} href={h} target="_blank" rel="noreferrer" className="card block hover:border-neon/50"><b>{n}</b> <span className="text-white/60">{v}</span></a>)}</div>)
 
