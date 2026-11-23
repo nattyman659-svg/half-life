@@ -82,9 +82,9 @@ function Auth({ say, toast }: { say: (t: string) => void; toast: string }) {
     if (!/^\S+@\S+\.\S+$/.test(email)) { say('Enter a valid email'); return setBusy(false) }
     if (mode === 'up') { const c = await supabase.rpc('check_student_id', { p: sid }); if (c.data !== 'ok') { say(c.data === 'taken' ? 'This Student ID is already registered' : 'Student ID not found in the class list'); return setBusy(false) } }
     const r = mode === 'in' ? await supabase.auth.signInWithPassword({ email, password: pw })
-      : mode === 'up' ? await supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name, student_id: sid.trim() }, emailRedirectTo: location.origin + '/?verified=1' } })
+      : mode === 'up' ? await supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name, student_id: sid.trim() } } })
       : await supabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin })
-    say(r.error ? r.error.message : mode === 'in' ? 'Welcome back' : 'Check your email to continue'); setBusy(false)
+    say(r.error ? r.error.message : mode === 'in' ? 'Welcome back' : mode === 'up' ? 'Account created. Welcome!' : 'Check your email to continue'); setBusy(false)
   }
   return (
     <div className="glow min-h-screen grid place-items-center p-4">
