@@ -153,7 +153,8 @@ function Vote({ uid, say }: { uid: string; say: (t: string) => void }) {
   const list = cands.filter(k => k.category_id === cat.id)
   return (<>
     <button className="text-white/60 mb-3" onClick={() => history.back()}>← All categories</button>
-    <h2 className="font-display text-3xl mb-4">{cat.name}</h2>
+    <h2 className="font-display text-3xl mb-2">{cat.name}</h2>
+    {cat.description && <p className="text-white/70 mb-6 max-w-2xl">{cat.description}</p>}
     {!list.length && <p className="text-white/50">No candidates yet.</p>}
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{list.map(k => (
       <motion.div key={k.id} whileHover={{ y: -6 }} className="card overflow-hidden">
@@ -201,7 +202,7 @@ const Contact = () => (<div className="max-w-xl space-y-3"><h2 className="font-d
 function Admin({ say }: { say: (t: string) => void }) {
   const [stats, setStats] = useState<Record<string, number>>({}); const [res, setRes] = useState<Res[]>([])
   const [cats, setCats] = useState<Cat[]>([]); const [pub, setPub] = useState(false)
-  const [cn, setCn] = useState(''); const [k, setK] = useState({ full_name: '', category_id: '', bio: '', instagram: '', telegram: '' }); const [file, setFile] = useState<File | null>(null)
+  const [cn, setCn] = useState(''); const [cd, setCd] = useState(''); const [k, setK] = useState({ full_name: '', category_id: '', bio: '', instagram: '', telegram: '' }); const [file, setFile] = useState<File | null>(null)
   const load = useCallback(async () => {
     const [s, r, c, st] = await Promise.all([supabase.rpc('admin_stats'), supabase.rpc('admin_results'), supabase.from('categories').select('*').order('sort'), supabase.from('settings').select('*').single()])
     setStats(s.data ?? {}); setRes((r.data as Res[]) ?? []); setCats((c.data as Cat[]) ?? []); setPub(!!st.data?.results_published)
@@ -220,10 +221,11 @@ function Admin({ say }: { say: (t: string) => void }) {
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">{Object.entries(stats).map(([n, v]) => <div key={n} className="card"><motion.b key={v} initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="text-3xl text-neon">{v}</motion.b><p className="capitalize text-white/60">{n}</p></div>)}</div>
     <div className="flex gap-2 items-center"><button className="btn bg-ember" onClick={() => run(supabase.from('settings').update({ results_published: !pub }).eq('id', 1), pub ? 'Results hidden' : 'Results published')}>{pub ? 'Unpublish results' : 'Publish results'}</button></div>
     <section className="space-y-3"><h3 className="font-display text-xl">Categories</h3>
-      <div className="flex gap-2"><input placeholder="New category" value={cn} onChange={e => setCn(e.target.value)} />
-        <button className="btn bg-neon text-ink" onClick={() => cn.trim() && run(supabase.from('categories').insert({ name: cn.trim() }), 'Category added').then(() => setCn(''))}>Add</button></div>
+      <div className="flex flex-col sm:flex-row gap-2"><input placeholder="New category" value={cn} onChange={e => setCn(e.target.value)} /><input placeholder="Description (shown to voters)" value={cd} onChange={e => setCd(e.target.value)} />
+        <button className="btn bg-neon text-ink" onClick={() => cn.trim() && run(supabase.from('categories').insert({ name: cn.trim(), description: cd.trim() || null }), 'Category added').then(() => { setCn(''); setCd('') })}>Add</button></div>
       {cats.map(c => <div key={c.id} className="card flex flex-wrap items-center gap-2 justify-between"><b>{c.name}</b><span className="flex gap-2">
         <button className="btn bg-white/10" onClick={() => run(supabase.from('categories').update({ is_open: !c.is_open }).eq('id', c.id), c.is_open ? 'Closed' : 'Opened')}>{c.is_open ? 'Close' : 'Open'}</button>
+        <button className="btn bg-white/10" onClick={() => { const d = window.prompt('Description for ' + c.name, c.description ?? ''); if (d !== null) run(supabase.from('categories').update({ description: d.trim() || null }).eq('id', c.id), 'Description saved') }}>Description</button>
         <button className="btn bg-white/10" onClick={() => confirmDel(c.name) && run(supabase.from('categories').delete().eq('id', c.id), 'Deleted')}>Delete</button></span></div>)}</section>
     <section className="space-y-3"><h3 className="font-display text-xl">Add candidate (admins may be candidates too)</h3>
       <input placeholder="Full name" value={k.full_name} onChange={e => setK({ ...k, full_name: e.target.value })} />
