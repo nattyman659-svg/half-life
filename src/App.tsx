@@ -202,10 +202,11 @@ const Contact = () => (<div className="max-w-xl space-y-3"><h2 className="font-d
 function Admin({ say }: { say: (t: string) => void }) {
   const [stats, setStats] = useState<Record<string, number>>({}); const [res, setRes] = useState<Res[]>([])
   const [cats, setCats] = useState<Cat[]>([]); const [pub, setPub] = useState(false)
+  const [cands, setCands] = useState<Cand[]>([]); const [ed, setEd] = useState<Cand | null>(null)
   const [cn, setCn] = useState(''); const [cd, setCd] = useState(''); const [k, setK] = useState({ full_name: '', category_id: '', bio: '', instagram: '', telegram: '' }); const [file, setFile] = useState<File | null>(null)
   const load = useCallback(async () => {
-    const [s, r, c, st] = await Promise.all([supabase.rpc('admin_stats'), supabase.rpc('admin_results'), supabase.from('categories').select('*').order('sort'), supabase.from('settings').select('*').single()])
-    setStats(s.data ?? {}); setRes((r.data as Res[]) ?? []); setCats((c.data as Cat[]) ?? []); setPub(!!st.data?.results_published)
+    const [s, r, c, st, kk] = await Promise.all([supabase.rpc('admin_stats'), supabase.rpc('admin_results'), supabase.from('categories').select('*').order('sort'), supabase.from('settings').select('*').single(), supabase.from('candidates').select('*').order('full_name')])
+    setStats(s.data ?? {}); setRes((r.data as Res[]) ?? []); setCats((c.data as Cat[]) ?? []); setPub(!!st.data?.results_published); setCands((kk.data as Cand[]) ?? [])
   }, [])
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t) }, [load])
   const run = async (p: PromiseLike<{ error: { message: string } | null }>, ok: string) => { const { error } = await p; say(error ? error.message : ok); load() }
@@ -223,10 +224,11 @@ function Admin({ say }: { say: (t: string) => void }) {
     <section className="space-y-3"><h3 className="font-display text-xl">Categories</h3>
       <div className="flex flex-col sm:flex-row gap-2"><input placeholder="New category" value={cn} onChange={e => setCn(e.target.value)} /><input placeholder="Description (shown to voters)" value={cd} onChange={e => setCd(e.target.value)} />
         <button className="btn bg-neon text-ink" onClick={() => cn.trim() && run(supabase.from('categories').insert({ name: cn.trim(), description: cd.trim() || null }), 'Category added').then(() => { setCn(''); setCd('') })}>Add</button></div>
-      {cats.map(c => <div key={c.id} className="card flex flex-wrap items-center gap-2 justify-between"><b>{c.name}</b><span className="flex gap-2">
+      {cats.map(c => <div key={c.id} className="card space-y-3"><div className="flex flex-wrap items-center gap-2 justify-between"><b>{c.name}</b><span className="flex gap-2">
         <button className="btn bg-white/10" onClick={() => run(supabase.from('categories').update({ is_open: !c.is_open }).eq('id', c.id), c.is_open ? 'Closed' : 'Opened')}>{c.is_open ? 'Close' : 'Open'}</button>
         <button className="btn bg-white/10" onClick={() => { const d = window.prompt('Description for ' + c.name, c.description ?? ''); if (d !== null) run(supabase.from('categories').update({ description: d.trim() || null }).eq('id', c.id), 'Description saved') }}>Description</button>
-        <button className="btn bg-white/10" onClick={() => confirmDel(c.name) && run(supabase.from('categories').delete().eq('id', c.id), 'Deleted')}>Delete</button></span></div>)}</section>
+        <button className="btn bg-white/10" onClick={() => confirmDel(c.name) && run(supabase.from('categories').delete().eq('id', c.id), 'Deleted')}>Delete</button></span></div>
+        {cands.filter(x => x.category_id === c.id).map(x => (<div key={x.id} className="flex items-center justify-between gap-2 border-t border-white/10 pt-2"><span className="truncate">{x.full_name}</span><span className="flex gap-2 shrink-0"><button className="btn bg-white/10" onClick={() => setEd(x)}>Edit</button><button className="btn bg-ember" onClick={() => confirmDelCand(x.full_name) && run(supabase.from('candidates').delete().eq('id', x.id), 'Candidate deleted')}>Delete</button></span></div>))}</div>)}</section>
     <section className="space-y-3"><h3 className="font-display text-xl">Add candidate (admins may be candidates too)</h3>
       <input placeholder="Full name" value={k.full_name} onChange={e => setK({ ...k, full_name: e.target.value })} />
       <select className="w-full rounded-xl bg-ink border border-white/10 p-3" value={k.category_id} onChange={e => setK({ ...k, category_id: e.target.value })}><option value="">Category…</option>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -236,8 +238,10 @@ function Admin({ say }: { say: (t: string) => void }) {
       <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} /><button className="btn bg-neon text-ink" onClick={addCand}>Add candidate</button></section>
     <section className="space-y-4"><h3 className="font-display text-xl">Live results (refreshes every 5s)</h3>{cats.map(c => { const rows = res.filter(r => r.category_id === c.id); const sum = rows.reduce((a, r) => a + Number(r.votes), 0)
       return <div key={c.id} className="card"><b>{c.name}</b>{rows.map(r => <div key={r.candidate_id} className="mt-2"><div className="flex justify-between text-sm"><span>{r.full_name}</span><span>{r.votes} ({sum ? Math.round(Number(r.votes) / sum * 100) : 0}%)</span></div>
-        <div className="h-2 bg-white/10 rounded-full"><motion.div className="h-2 bg-neon rounded-full" animate={{ width: `${sum ? Number(r.votes) / sum * 100 : 0}%` }} /></div></div>)}</div> })}</section></div>)
+        <div className="h-2 bg-white/10 rounded-full"><motion.div className="h-2 bg-neon rounded-full" animate={{ width: `${sum ? Number(r.votes) / sum * 100 : 0}%` }} /></div></div>)}</div> })}</section>
+    {ed && <EditCand c={ed} say={say} onClose={() => { setEd(null); load() }} />}</div>)
 }
+const confirmDelCand = (n: string) => window.confirm(`Delete candidate "${n}"? Their votes will also be deleted.`)
 const confirmDel = (n: string) => window.confirm(`Delete "${n}"? This removes its candidates and votes.`)
 
 function Verified({ onContinue }: { onContinue: () => void }) {
@@ -250,5 +254,38 @@ function Verified({ onContinue }: { onContinue: () => void }) {
         <p className="text-white/70">Your account is confirmed. You can now join the 2026 Software Engineering class awards and cast your votes.</p>
         <button className="btn w-full bg-neon text-ink" onClick={onContinue}>Go to HALF LIFE</button>
       </motion.div>
+    </div>)
+}
+
+function EditCand({ c, say, onClose }: { c: Cand; say: (t: string) => void; onClose: () => void }) {
+  const [f, setF] = useState({ full_name: c.full_name, bio: c.bio ?? '', instagram: c.instagram ?? '', telegram: c.telegram ?? '' })
+  const [file, setFile] = useState<File | null>(null); const [busy, setBusy] = useState(false)
+  const save = async () => {
+    if (f.full_name.trim().length < 2) return say('Name too short')
+    setBusy(true); let photo_url = c.photo_url
+    if (file) {
+      if (!file.type.startsWith('image/') || file.size > 2e6) { setBusy(false); return say('Image under 2MB only') }
+      const path = `${crypto.randomUUID()}.${file.name.split('.').pop()}`
+      const up = await supabase.storage.from('photos').upload(path, file)
+      if (up.error) { setBusy(false); return say(up.error.message) }
+      photo_url = supabase.storage.from('photos').getPublicUrl(path).data.publicUrl
+    }
+    const { error } = await supabase.from('candidates').update({ full_name: f.full_name.trim(), bio: f.bio.trim() || null, instagram: f.instagram.trim() || null, telegram: f.telegram.trim() || null, photo_url }).eq('id', c.id)
+    setBusy(false); say(error ? error.message : 'Candidate updated'); if (!error) onClose()
+  }
+  return (
+    <div className="fixed inset-0 z-40 bg-black/70 grid place-items-center p-4 overflow-y-auto" role="dialog" aria-modal>
+      <div className="card bg-ink w-full max-w-md space-y-3 my-8">
+        <h3 className="font-display text-xl">Edit candidate</h3>
+        {c.photo_url && <img src={c.photo_url} alt={c.full_name} className="h-24 w-24 rounded-xl object-cover" />}
+        <input placeholder="Full name" value={f.full_name} onChange={e => setF({ ...f, full_name: e.target.value })} />
+        <textarea placeholder="Short bio" value={f.bio} onChange={e => setF({ ...f, bio: e.target.value })} />
+        <input placeholder="Instagram URL" value={f.instagram} onChange={e => setF({ ...f, instagram: e.target.value })} />
+        <input placeholder="Telegram @handle" value={f.telegram} onChange={e => setF({ ...f, telegram: e.target.value })} />
+        <label className="text-sm text-white/60">Replace photo (optional)</label>
+        <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        <div className="flex gap-2"><button className="btn flex-1 bg-white/10" onClick={onClose}>Cancel</button>
+          <button disabled={busy} className="btn flex-1 bg-neon text-ink" onClick={save}>{busy ? '...' : 'Save'}</button></div>
+      </div>
     </div>)
 }
