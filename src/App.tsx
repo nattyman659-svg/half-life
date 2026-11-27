@@ -11,6 +11,8 @@ type Page = 'home' | 'vote' | 'profile' | 'about' | 'contact' | 'admin'
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -16 } }
 const errText: Record<string, string> = { already_voted: 'You already voted in this category.', voting_closed: 'Voting is closed for this category.' }
+const igUser = (v: string | null) => (v ?? '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[/?#].*$/, '').replace(/^@/, '')
+const igHandle = (v: string) => { const u = igUser(v); return u ? '@' + u : null }
 const msg = (e: { message?: string }) => Object.entries(errText).find(([k]) => e.message?.includes(k))?.[1] ?? e.message ?? 'Something went wrong'
 
 export default function App() {
@@ -161,7 +163,7 @@ function Vote({ uid, say }: { uid: string; say: (t: string) => void }) {
         {k.photo_url ? <img src={k.photo_url} alt={k.full_name} loading="lazy" className="w-full aspect-square object-cover rounded-xl" />
           : <div className="aspect-square rounded-xl bg-white/10 grid place-items-center text-5xl">{k.full_name[0]}</div>}
         <div className="font-display text-xl mt-3">{k.full_name}</div><p className="text-sm text-white/60">{k.bio}</p>
-        <div className="flex gap-3 text-sm my-2">{k.instagram && <a className="underline" href={k.instagram} target="_blank" rel="noreferrer">Instagram</a>}
+        <div className="flex gap-3 text-sm my-2">{igUser(k.instagram) && <a className="underline" href={`https://instagram.com/${igUser(k.instagram)}`} target="_blank" rel="noreferrer">Instagram: @{igUser(k.instagram)}</a>}
           {k.telegram && <a className="underline" href={`https://t.me/${k.telegram.replace('@', '')}`} target="_blank" rel="noreferrer">Telegram</a>}</div>
         <button disabled={done.has(cat.id) || !cat.is_open} onClick={() => setPick(k)}
           className="btn w-full bg-neon text-ink disabled:opacity-40">{done.has(cat.id) ? 'Already voted' : cat.is_open ? 'Vote' : 'Closed'}</button>
@@ -216,7 +218,7 @@ function Admin({ say }: { say: (t: string) => void }) {
     if (file) { if (!file.type.startsWith('image/') || file.size > 2e6) return say('Image under 2MB only')
       const path = `${crypto.randomUUID()}.${file.name.split('.').pop()}`; const up = await supabase.storage.from('photos').upload(path, file)
       if (up.error) return say(up.error.message); photo_url = supabase.storage.from('photos').getPublicUrl(path).data.publicUrl }
-    await run(supabase.from('candidates').insert({ ...k, photo_url }), 'Candidate added')
+    await run(supabase.from('candidates').insert({ ...k, instagram: igHandle(k.instagram), photo_url }), 'Candidate added')
   }
   return (<div className="space-y-8"><h2 className="font-display text-3xl">Admin dashboard</h2>
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">{Object.entries(stats).map(([n, v]) => <div key={n} className="card"><motion.b key={v} initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="text-3xl text-neon">{v}</motion.b><p className="capitalize text-white/60">{n}</p></div>)}</div>
@@ -233,7 +235,7 @@ function Admin({ say }: { say: (t: string) => void }) {
       <input placeholder="Full name" value={k.full_name} onChange={e => setK({ ...k, full_name: e.target.value })} />
       <select className="w-full rounded-xl bg-ink border border-white/10 p-3" value={k.category_id} onChange={e => setK({ ...k, category_id: e.target.value })}><option value="">Category…</option>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <textarea placeholder="Short bio" value={k.bio} onChange={e => setK({ ...k, bio: e.target.value })} />
-      <input placeholder="Instagram URL" value={k.instagram} onChange={e => setK({ ...k, instagram: e.target.value })} />
+      <input placeholder="Instagram @username" value={k.instagram} onChange={e => setK({ ...k, instagram: e.target.value })} />
       <input placeholder="Telegram @handle" value={k.telegram} onChange={e => setK({ ...k, telegram: e.target.value })} />
       <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} /><button className="btn bg-neon text-ink" onClick={addCand}>Add candidate</button></section>
     <section className="space-y-4"><h3 className="font-display text-xl">Live results (refreshes every 5s)</h3>{cats.map(c => { const rows = res.filter(r => r.category_id === c.id); const sum = rows.reduce((a, r) => a + Number(r.votes), 0)
@@ -258,7 +260,7 @@ function Verified({ onContinue }: { onContinue: () => void }) {
 }
 
 function EditCand({ c, say, onClose }: { c: Cand; say: (t: string) => void; onClose: () => void }) {
-  const [f, setF] = useState({ full_name: c.full_name, bio: c.bio ?? '', instagram: c.instagram ?? '', telegram: c.telegram ?? '' })
+  const [f, setF] = useState({ full_name: c.full_name, bio: c.bio ?? '', instagram: igHandle(c.instagram ?? '') ?? '', telegram: c.telegram ?? '' })
   const [file, setFile] = useState<File | null>(null); const [busy, setBusy] = useState(false)
   const save = async () => {
     if (f.full_name.trim().length < 2) return say('Name too short')
@@ -270,7 +272,7 @@ function EditCand({ c, say, onClose }: { c: Cand; say: (t: string) => void; onCl
       if (up.error) { setBusy(false); return say(up.error.message) }
       photo_url = supabase.storage.from('photos').getPublicUrl(path).data.publicUrl
     }
-    const { error } = await supabase.from('candidates').update({ full_name: f.full_name.trim(), bio: f.bio.trim() || null, instagram: f.instagram.trim() || null, telegram: f.telegram.trim() || null, photo_url }).eq('id', c.id)
+    const { error } = await supabase.from('candidates').update({ full_name: f.full_name.trim(), bio: f.bio.trim() || null, instagram: igHandle(f.instagram), telegram: f.telegram.trim() || null, photo_url }).eq('id', c.id)
     setBusy(false); say(error ? error.message : 'Candidate updated'); if (!error) onClose()
   }
   return (
@@ -280,7 +282,7 @@ function EditCand({ c, say, onClose }: { c: Cand; say: (t: string) => void; onCl
         {c.photo_url && <img src={c.photo_url} alt={c.full_name} className="h-24 w-24 rounded-xl object-cover" />}
         <input placeholder="Full name" value={f.full_name} onChange={e => setF({ ...f, full_name: e.target.value })} />
         <textarea placeholder="Short bio" value={f.bio} onChange={e => setF({ ...f, bio: e.target.value })} />
-        <input placeholder="Instagram URL" value={f.instagram} onChange={e => setF({ ...f, instagram: e.target.value })} />
+        <input placeholder="Instagram @username" value={f.instagram} onChange={e => setF({ ...f, instagram: e.target.value })} />
         <input placeholder="Telegram @handle" value={f.telegram} onChange={e => setF({ ...f, telegram: e.target.value })} />
         <label className="text-sm text-white/60">Replace photo (optional)</label>
         <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} />
